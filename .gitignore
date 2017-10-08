@@ -1,0 +1,7 @@
+
+/result
+
+/test-client/dist
+/test-client/shell.nix
+/test-server/dist
+/test-server/shell.nix

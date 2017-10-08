@@ -1,0 +1,48 @@
+name:                test-client
+version:             0.11
+synopsis: Client part of the test
+description:
+  Client part of the test
+license:             BSD3
+license-file:        LICENSE
+author:              Servant Contributors
+maintainer:          haskell-servant-maintainers@googlegroups.com
+copyright:           2014-2016 Zalora South East Asia Pte Ltd, 2016-2017 Servant Contributors
+category:            Servant, Web
+build-type:          Simple
+cabal-version:       >=1.10
+tested-with:         GHC >= 7.8
+homepage:            http://haskell-servant.readthedocs.org/
+Bug-reports:         http://github.com/haskell-servant/servant/issues
+source-repository head
+  type: git
+  location: http://github.com/haskell-servant/servant.git
+
+executable test-client
+  ghc-options: -Wall
+  default-language: Haskell2010
+  hs-source-dirs: src
+  main-is: Main.hs
+  build-depends:
+      base == 4.*
+    , aeson
+    , base-compat
+    , bytestring
+    , containers
+    , deepseq
+    , ghcjs-base
+    , hspec == 2.*
+    , http-api-data
+    , http-client
+    , http-media
+    , http-types
+    , HUnit
+    , mtl
+    , network >= 2.6
+    , QuickCheck >= 2.7
+    , servant
+    , servant-client-ghcjs
+    , servant-client-core
+    , text
+    , transformers
+    , transformers-compat

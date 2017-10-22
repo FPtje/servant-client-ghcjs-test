@@ -24,11 +24,9 @@ import           Control.Arrow                              (left)
 import           Data.Aeson
 import           Data.Char                                  (chr, isPrint)
 import           Data.Foldable                              (forM_)
-import qualified Data.JSString as JSS
 import           Data.Monoid                                hiding (getLast)
 import           Data.Proxy
 import           GHC.Generics                               (Generic)
-import           JavaScript.Web.Location
 import qualified Network.HTTP.Types                         as HTTP
 import           Test.Hspec
 import           Test.Hspec.QuickCheck
@@ -188,42 +186,42 @@ sucessSpec :: Spec
 sucessSpec = do
 
     it "Servant.API.Get" $ \() -> do
-      left show <$> callServant getGet `shouldReturn` Right alice
+      left show <$> runClientM getGet `shouldReturn` Right alice
 
     describe "Servant.API.Delete" $ do
       it "allows empty content type" $ \() -> do
-        left show <$> callServant getDeleteEmpty `shouldReturn` Right NoContent
+        left show <$> runClientM getDeleteEmpty `shouldReturn` Right NoContent
 
       it "allows content type" $ \() -> do
-        left show <$> callServant getDeleteContentType `shouldReturn` Right NoContent
+        left show <$> runClientM getDeleteContentType `shouldReturn` Right NoContent
 
     it "Servant.API.Capture" $ \() -> do
-      left show <$> callServant (getCapture "Paula") `shouldReturn` Right (Person "Paula" 0)
+      left show <$> runClientM (getCapture "Paula") `shouldReturn` Right (Person "Paula" 0)
 
     it "Servant.API.CaptureAll" $ \() -> do
       let expected = [Person "Paula" 0, Person "Peta" 1]
-      left show <$> callServant (getCaptureAll ["Paula", "Peta"]) `shouldReturn` Right expected
+      left show <$> runClientM (getCaptureAll ["Paula", "Peta"]) `shouldReturn` Right expected
 
     it "Servant.API.ReqBody" $ \() -> do
       let p = Person "Clara" 42
-      left show <$> callServant (getBody p) `shouldReturn` Right p
+      left show <$> runClientM (getBody p) `shouldReturn` Right p
 
     it "Servant.API.QueryParam" $ \() -> do
-      left show <$> callServant (getQueryParam (Just "alice"))  `shouldReturn` Right alice
-      Left (FailureResponse r) <- callServant (getQueryParam (Just "bob"))
+      left show <$> runClientM (getQueryParam (Just "alice"))  `shouldReturn` Right alice
+      Left (FailureResponse r) <- runClientM (getQueryParam (Just "bob"))
       responseStatusCode r `shouldBe` HTTP.Status 400 "bob not found"
 
     it "Servant.API.QueryParam.QueryParams" $ \() -> do
-      left show <$> callServant (getQueryParams []) `shouldReturn` Right []
-      left show <$> callServant (getQueryParams ["alice", "bob"])
+      left show <$> runClientM (getQueryParams []) `shouldReturn` Right []
+      left show <$> runClientM (getQueryParams ["alice", "bob"])
         `shouldReturn` Right [Person "alice" 0, Person "bob" 1]
 
     context "Servant.API.QueryParam.QueryFlag" $
       forM_ [False, True] $ \ flag -> it (show flag) $ \() -> do
-        left show <$> callServant (getQueryFlag flag) `shouldReturn` Right flag
+        left show <$> runClientM (getQueryFlag flag) `shouldReturn` Right flag
 
     it "Servant.API.Raw on success" $ \() -> do
-      res <- callServant (getRawSuccess HTTP.methodGet)
+      res <- runClientM (getRawSuccess HTTP.methodGet)
       case res of
         Left e -> assertFailure $ show e
         Right r -> do
@@ -231,7 +229,7 @@ sucessSpec = do
           responseBody r `shouldBe` "rawSuccess"
 
     it "Servant.API.Raw should return a Left in case of failure" $ \() -> do
-      res <- callServant (getRawFailure HTTP.methodGet)
+      res <- runClientM (getRawFailure HTTP.methodGet)
       case res of
         Right _ -> assertFailure "expected Left, but got Right"
         Left (FailureResponse r) -> do
@@ -240,7 +238,7 @@ sucessSpec = do
         Left e -> assertFailure $ "expected FailureResponse, but got " ++ show e
 
     it "Returns headers appropriately" $ \() -> do
-      res <- callServant getRespHeaders
+      res <- runClientM getRespHeaders
       case res of
         Left e -> assertFailure $ show e
         Right val -> getHeaders val `shouldBe` [("X-Example1", "1729"), ("X-Example2", "eg2")]
@@ -249,7 +247,7 @@ sucessSpec = do
       it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $ \() ->
         property $ forAllShrink pathGen shrink $ \(NonEmpty cap) num flag body ->
           ioProperty $ do
-            result <- left show <$> callServant (getMultiple cap num flag body)
+            result <- left show <$> runClientM (getMultiple cap num flag body)
             return $
               result === Right (cap, num, flag, body)
 
@@ -257,7 +255,7 @@ failSpec :: Spec
 failSpec = do
     context "client returns errors appropriately" $ do
       it "reports FailureResponse" $ \() -> do
-        Left res <- callServant failGetDeleteEmpty
+        Left res <- runClientM failGetDeleteEmpty
         case res of
           -- Expect 405 because the server also runs a raw endpoint to serve
           -- static files
@@ -265,19 +263,19 @@ failSpec = do
           _ -> fail $ "expected 404 response, but got " <> show res
 
       it "reports DecodeFailure" $ \() -> do
-        Left res <- callServant (failGetCapture "foo")
+        Left res <- runClientM (failGetCapture "foo")
         case res of
           DecodeFailure _ _ -> return ()
           _ -> fail $ "expected DecodeFailure, but got " <> show res
 
       it "reports UnsupportedContentType" $ \() -> do
-        Left res <- callServant failGetGet
+        Left res <- runClientM failGetGet
         case res of
           UnsupportedContentType ("application/octet-stream") _ -> return ()
           _ -> fail $ "expected UnsupportedContentType, but got " <> show res
 
       it "reports InvalidContentTypeHeader" $ \() -> do
-        Left res <- callServant (failGetBody alice)
+        Left res <- runClientM (failGetBody alice)
         case res of
           InvalidContentTypeHeader _ -> return ()
           _ -> fail $ "expected InvalidContentTypeHeader, but got " <> show res
@@ -288,13 +286,13 @@ basicAuthSpec = do
 
     it "Authenticates a BasicAuth protected server appropriately" $ \() -> do
       let basicAuthData = BasicAuthData "servant" "server"
-      left show <$> callServant (getBasic basicAuthData) `shouldReturn` Right alice
+      left show <$> runClientM (getBasic basicAuthData) `shouldReturn` Right alice
 
   context "Authentication is rejected when requests are not authenticated properly" $ do
 
     it "Authenticates a BasicAuth protected server appropriately" $ \() -> do
       let basicAuthData = BasicAuthData "not" "password"
-      Left (FailureResponse r) <- callServant (getBasic basicAuthData)
+      Left (FailureResponse r) <- runClientM (getBasic basicAuthData)
       responseStatusCode r `shouldBe` HTTP.Status 403 "Forbidden"
 
 genAuthSpec :: Spec
@@ -303,42 +301,14 @@ genAuthSpec = do
 
     it "Authenticates a AuthProtect protected server appropriately" $ \() -> do
       let authRequest = Auth.mkAuthenticatedRequest () (\_ req -> Req.addHeader "AuthHeader" ("cool" :: String) req)
-      left show <$> callServant (getProtected authRequest) `shouldReturn` Right alice
+      left show <$> runClientM (getProtected authRequest) `shouldReturn` Right alice
 
   context "Authentication is rejected when requests are not authenticated properly" $ do
 
     it "Authenticates a AuthProtect protected server appropriately" $ \() -> do
       let authRequest = Auth.mkAuthenticatedRequest () (\_ req -> Req.addHeader "Wrong" ("header" :: String) req)
-      Left (FailureResponse r) <- callServant (getProtected authRequest)
+      Left (FailureResponse r) <- runClientM (getProtected authRequest)
       responseStatusCode r `shouldBe` HTTP.Status 401 "Unauthorized"
-
-callServant
-    :: ClientM a
-    -> IO (Either ServantError a)
-callServant m = do
-    curLoc <- getWindowLocation
-
-    jsStr_protocol <- getProtocol curLoc
-    jsStr_port     <- getPort     curLoc
-    jsStr_hostname <- getHostname curLoc
-
-    let protocol
-          | jsStr_protocol == "https:" = Https
-          | otherwise                  = Http
-
-        portStr :: String
-        portStr = JSS.unpack jsStr_port
-
-        port :: Int
-        port | null portStr = case protocol of
-                 Http  ->  80
-                 Https -> 443
-             | otherwise = read portStr
-
-        hostname :: String
-        hostname = JSS.unpack jsStr_hostname
-
-    runClientM m (ClientEnv (BaseUrl protocol hostname port ""))
 
 pathGen :: Gen (NonEmptyList Char)
 pathGen = fmap NonEmpty path

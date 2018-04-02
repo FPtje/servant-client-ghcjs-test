@@ -7,7 +7,7 @@
 }:
 mkDerivation {
   pname = "test-server";
-  version = "0.11";
+  version = "0.13";
   src = ./.;
   isLibrary = false;
   isExecutable = true;

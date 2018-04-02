@@ -13,4 +13,4 @@ https://github.com/haskell-servant/servant/pull/818
 - Run `cabal2nix servant/servant-client-ghcjs --compiler ghcjs > somefolder/servant/servant-client-ghcjs/default.nix`
 - Clone this repo into `somefolder/servant-client-ghcjs-test`
 - `cd somefolder/servant-client-ghcjs-test`
-- $(nix-build -A test-server)/bin/test-server $(nix-build -A test-client)/bin/test-client.jsexe
+- `$(nix-build -A test-server)/bin/test-server $(nix-build -A test-client)/bin/test-client.jsexe`

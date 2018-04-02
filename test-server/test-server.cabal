@@ -27,12 +27,13 @@ executable test-server
   build-depends:
       base == 4.*
     , aeson
+    , binary
     , base-compat
     , http-api-data
     , http-types
     , mtl
     , servant
     , servant-server
-    , servant-server == 0.11.*
+    , servant-server == 0.13.*
     , wai
     , warp

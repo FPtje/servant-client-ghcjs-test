@@ -19,12 +19,14 @@ module Main where
 
 import           Prelude                                    ()
 import           Prelude.Compat
-
+import           Data.Binary ( Binary )
+import qualified Data.Binary as Binary
 import           Control.Arrow                              (left)
 import           Data.Aeson
 import           Data.Char                                  (chr, isPrint)
+import           Data.Dynamic                               (Typeable)
 import           Data.Foldable                              (forM_)
-import           Data.Monoid                                hiding (getLast)
+import           Data.Monoid
 import           Data.Proxy
 import           GHC.Generics                               (Generic)
 import qualified Network.HTTP.Types                         as HTTP
@@ -52,6 +54,7 @@ import           Servant.API                                ((:<|>) ((:<|>)),
                                                              QueryParams,
                                                              ReqBody,
                                                              getHeaders)
+import           Servant.API.ContentTypes
 import           Servant.Client.Ghcjs
 import qualified Servant.Client.Core.Internal.Request as Req
 import qualified Servant.Client.Core.Internal.Auth as Auth
@@ -80,6 +83,8 @@ instance FromJSON Person
 instance ToForm Person
 instance FromForm Person
 
+instance Binary Person
+
 alice :: Person
 alice = Person "Alice" 42
 
@@ -105,6 +110,7 @@ type SuccessApi =
   :<|> "headers" :> Get '[JSON] (Headers TestHeaders Bool)
   :<|> "deleteContentType" :> DeleteNoContent '[JSON] NoContent
   :<|> "empty" :> EmptyAPI
+  :<|> "binary" :> ReqBody '[BINARY] Person :> Post '[BINARY] Person
 
 successApi :: Proxy ("success" :> SuccessApi)
 successApi = Proxy
@@ -123,6 +129,7 @@ getMultiple     :: String -> Maybe Int -> Bool -> [(String, [Rational])]
   -> ClientM (String, Maybe Int, Bool, [(String, [Rational])])
 getRespHeaders  :: ClientM (Headers TestHeaders Bool)
 getDeleteContentType :: ClientM NoContent
+binaryClient :: Person -> ClientM Person
 
 getGet
   :<|> getDeleteEmpty
@@ -137,7 +144,8 @@ getGet
   :<|> getMultiple
   :<|> getRespHeaders
   :<|> getDeleteContentType
-  :<|> EmptyClient = client successApi
+  :<|> EmptyClient
+  :<|> binaryClient = client successApi
 
 type FailApi =
        "get" :> Get '[JSON] Person
@@ -243,6 +251,13 @@ sucessSpec = do
         Left e -> assertFailure $ show e
         Right val -> getHeaders val `shouldBe` [("X-Example1", "1729"), ("X-Example2", "eg2")]
 
+    it "can send binary and receive binary information" $ \() -> do
+      res <- runClientM (binaryClient alice)
+      case res of
+        Left e -> assertFailure $ show e
+        Right person -> do
+          person `shouldBe` alice
+
     modifyMaxSuccess (const 20) $ do
       it "works for a combination of Capture, QueryParam, QueryFlag and ReqBody" $ \() ->
         property $ forAllShrink pathGen shrink $ \(NonEmpty cap) num flag body ->
@@ -317,3 +332,18 @@ pathGen = fmap NonEmpty path
     filter (not . (`elem` ("?%[]/#;" :: String))) $
     filter isPrint $
     map chr [0..127]
+
+-- Binary requests
+-- Binary encoded with Base64. Base64 because servant-client-ghcjs has a bug
+-- causing it to be unable to deal with binary data.
+data BINARY deriving Typeable
+
+instance Accept BINARY where
+    contentType _ = "application/octet-stream"
+
+instance Binary a => MimeUnrender BINARY a where
+    mimeUnrender _ bs =
+        pure $ Binary.decode bs
+
+instance Binary a => MimeRender BINARY a where
+    mimeRender _ = Binary.encode

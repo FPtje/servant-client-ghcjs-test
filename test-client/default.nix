@@ -6,7 +6,7 @@
 }:
 mkDerivation {
   pname = "test-client";
-  version = "0.11";
+  version = "0.13";
   src = ./.;
   isLibrary = false;
   isExecutable = true;

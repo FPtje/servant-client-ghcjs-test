@@ -27,6 +27,7 @@ executable test-client
       base == 4.*
     , aeson
     , base-compat
+    , binary
     , bytestring
     , containers
     , deepseq

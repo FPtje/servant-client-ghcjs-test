@@ -18,6 +18,9 @@ import           Prelude                                    ()
 import           Prelude.Compat
 import           Control.Monad.Error.Class                  (throwError)
 import           Data.Aeson
+import           Data.Binary ( Binary )
+import qualified Data.Binary as Binary
+import           Data.Dynamic                               (Typeable)
 import           Data.Proxy
 import           GHC.Generics                               (Generic)
 import qualified Network.HTTP.Types                         as HTTP
@@ -41,6 +44,7 @@ import           Servant.API                                ((:<|>) ((:<|>)),
                                                              QueryParam,
                                                              QueryParams,
                                                              ReqBody)
+import           Servant.API.ContentTypes
 import           Servant.Server
 import           Servant (serveDirectoryFileServer)
 import           Servant.Server.Experimental.Auth
@@ -59,8 +63,15 @@ instance FromJSON Person
 instance ToForm Person
 instance FromForm Person
 
+instance Binary Person
+
 alice :: Person
 alice = Person "Alice" 42
+
+main :: IO ()
+main = do
+  [clientpath] <- getArgs
+  run 8000 $ realServer clientpath
 
 type TestHeaders = '[Header "X-Example1" Int, Header "X-Example2" String]
 
@@ -86,6 +97,7 @@ type SuccessApi =
   :<|> "headers" :> Get '[JSON] (Headers TestHeaders Bool)
   :<|> "deleteContentType" :> DeleteNoContent '[JSON] NoContent
   :<|> "empty" :> EmptyAPI
+  :<|> "binary" :> ReqBody '[BINARY] Person :> Post '[BINARY] Person
 
 successApi :: Proxy SuccessApi
 successApi = Proxy
@@ -94,7 +106,7 @@ successServer :: Server SuccessApi
 successServer =
        return alice
   :<|> return NoContent
-  :<|> (\ name -> return $ Person name 0)
+  :<|> (\name -> return $ Person name 0)
   :<|> (\ names -> return (zipWith Person names [0..]))
   :<|> return
   :<|> (\ name -> case name of
@@ -109,6 +121,7 @@ successServer =
   :<|> (return $ addHeader 1729 $ addHeader "eg2" True)
   :<|> return NoContent
   :<|> emptyServer
+  :<|> (\p -> if p == alice then return p else throwError $ ServantErr 400 "Person not alice" "" [])
 
 type FailApi =
        "get" :> Raw
@@ -191,8 +204,17 @@ realServer clientPath = serveWithContext realApi realContext (
     genAuthServer   :<|>
     serveDirectoryFileServer clientPath)
 
+-- Binary requests
+-- Binary encoded with Base64. Base64 because servant-client-ghcjs has a bug
+-- causing it to be unable to deal with binary data.
+data BINARY deriving Typeable
 
-main :: IO ()
-main = do
-  [clientpath] <- getArgs
-  run 8000 $ realServer clientpath
+instance Accept BINARY where
+    contentType _ = "application/octet-stream"
+
+instance Binary a => MimeUnrender BINARY a where
+    mimeUnrender _ bs =
+        pure $ Binary.decode bs
+
+instance Binary a => MimeRender BINARY a where
+    mimeRender _ = Binary.encode

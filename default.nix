@@ -1,10 +1,13 @@
 {pkgs ? import <nixpkgs> {}, stdenv ? pkgs.stdenv}:
 let
-  nixpkgs = import (pkgs.fetchgit {
-    url = "https://github.com/NixOS/nixpkgs-channels.git";
-    rev = "694529e45d92fe3ca28c7aa78f57ee4b11d4bb73";
-    sha256 = "07h6jl0mqy5g5xq5wnicd1add3n2cri8601aw957y46mfbm6j3n5";
+  nixpkgs = import (pkgs.fetchFromGitHub {
+    rev = "2070830ba845b69c7c597537786d9b9498fa4b28";
+    sha256 = "0b8dyz53k5hkg0ngnp1kxjysz0hdw7vr47g5xcrprrfh32piqcil";
+    owner = "NixOS";
+    repo = "nixpkgs-channels";
   }) {};
+
+  hlib = pkgs.haskell.lib;
 
   ghc = nixpkgs.haskellPackages;
   ghcjs = nixpkgs.haskell.packages.ghcjsHEAD;
@@ -12,12 +15,12 @@ let
   # Obvious TODO is not linking to a relative path. Servant doesn't have nix
   # files by default though (you have to run
   # servant/scripts/generate-nix-files.sh), so it's not trivial
-  servant-ghc = ghc.callPackage ../servant/servant {};
-  servant-server = ghc.callPackage ../servant/servant-server { servant = servant-ghc; };
+  servant-ghc = hlib.doJailbreak (ghc.callPackage ../servant/servant {});
+  servant-server = hlib.dontCheck (hlib.doJailbreak (ghc.callPackage ../servant/servant-server { servant = servant-ghc; }));
 
-  servant-ghcjs = ghcjs.callPackage ../servant/servant {};
-  servant-client-core = ghcjs.callPackage ../servant/servant-client-core { servant = servant-ghcjs; };
-  servant-client-ghcjs = ghcjs.callPackage ../servant/servant-client-ghcjs { inherit servant-client-core; };
+  servant-ghcjs = hlib.doJailbreak (ghcjs.callPackage ../servant/servant {});
+  servant-client-core = hlib.doJailbreak (ghcjs.callPackage ../servant/servant-client-core { servant = servant-ghcjs; });
+  servant-client-ghcjs = hlib.doJailbreak (ghcjs.callPackage ../servant/servant-client-ghcjs { inherit servant-client-core; });
 in
 {
   test-server = ghc.callPackage ./test-server { servant = servant-ghc; inherit servant-server;};
